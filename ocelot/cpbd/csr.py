@@ -8,7 +8,10 @@ import importlib
 import logging
 
 import numpy as np
+from scipy import interpolate
 from scipy.integrate import cumtrapz
+from scipy.ndimage.filters import gaussian_filter
+from scipy.optimize import curve_fit
 
 from ocelot.common.globals import pi, speed_of_light, m_e_eV, m_e_GeV
 from ocelot.common import math_op
@@ -23,11 +26,12 @@ from ocelot.cpbd.elements.sbend import SBend
 from ocelot.cpbd.elements.xyquadruple import XYQuadrupole
 
 from ocelot.cpbd.physics_proc import PhysProc
-# matplotlib may or may not be on the HPC nodes at DESY.
-#try:
-#    import matplotlib.pyplot as plt
-#except ImportError:
-#    pass
+
+# matplotlib may or may not be on the HPC nodes at DESY.  
+try:
+    import matplotlib.pyplot as plt
+except ImportError:
+    pass
 
 # Try to import numba, pyfftw and numexpr for improved performance
 logger = logging.getLogger(__name__)
@@ -263,78 +267,6 @@ class Smoothing:
                     charge_per_step[k-1] += w * qps
         return z1, z2, Nz, charge_per_step
 
-    def Q2EQUI_modified(self, BS_params, SBINB):
-        """
-        input
-        BIN = bin boundaries BIN(N_BIN, 2), in time or space
-        Q_BIN = charges per bin Q_BIN(N_BIN)
-        BS_params = binning and smoothing parameters
-        binning.......................
-        X_QBIN = length or charge binning
-        0... 1 = length...charge
-        N_BIN = number of bins
-        M_BIN = multiple binning(with shifted bins)
-        smoothing.....................
-        IP_method = 0 / 1 / 2 for rectangular / triangular / gauss
-        SP = ? parameter for gauss
-        sigma_min = minimal sigma, if IP_method == 2
-        step_unit = if positive --> step=integer * step_unit
-        output
-        z1, z2, Nz = equidistant mesh(Nz meshlines)
-        bins might overlap!
-        """
-
-        N_BIN = BS_params[1]
-        M_BIN = BS_params[2]
-        K_BIN = N_BIN * M_BIN  # number of sub - bins
-        I_BIN = K_BIN - (M_BIN - 1)  # number of bin intervalls
-        # put charges to sub - bins
-
-        BIN = [SBINB[0:I_BIN], SBINB[M_BIN + np.arange(I_BIN)]]
-
-        # interpolation parameters
-        IP_method = BS_params[3]
-        SP = BS_params[4]
-        if SP <= 0:
-            SP = 0.5
-
-        sigma_min = max(0, BS_params[5])
-        if len(BS_params) < 7:
-            step_unit = 0
-        else:
-            step_unit = max(0, BS_params[6])
-
-        # define mesh
-        N_BIN = len(BIN[0])
-
-        if IP_method == 1:
-            z1 = np.min(2 * BIN[0][:] - BIN[1][:])
-            z2 = np.max(2 * BIN[1][:] - BIN[0][:])
-            step = 0.5 * min(BIN[1][:] - BIN[:][0])
-        elif IP_method == 2:
-            NSIG = 5
-            MITTE = 0.5 * (BIN[0] + BIN[1])
-            RMS = SP * (BIN[1] - BIN[0])
-            for nb in range(N_BIN):
-                RMS[nb] = max(RMS[nb], sigma_min)
-            z1 = np.min(MITTE - NSIG * RMS)
-            z2 = np.max(MITTE + NSIG * RMS)
-            step = 0.25 * min(RMS)
-        else:
-            z1 = np.min(BIN[0][:])
-            z2 = np.max(BIN[1][:])
-            step = 0.5 * min(BIN[1][:] - BIN[0][:])
-
-        if step_unit > 0:
-            step = step_unit * max(1, np.round(step / step_unit))
-            z1 = step * np.floor(z1 / step)
-            z2 = step * np.ceil(z2 / step)
-            Nz = np.round((z2 - z1) / step)
-        else:
-            Nz = np.round((z2 - z1) / step)
-
-        return z1, z2, Nz
-
 
 class SubBinning:
     def __init__(self, x_qbin, n_bin, m_bin):
@@ -345,11 +277,11 @@ class SubBinning:
         if nb_flag:
             logger.debug("SubBinning: NUMBA")
             self.p_per_subbins = nb.jit(
-                nb.double[:](nb.double[:], nb.double[:], nb.int64), nopython=True)(
+                nb.double[:](nb.double[:], nb.double[:], nb.int64),nopython=True)(
                     self.p_per_subbins_py)
         else:
             logger.debug("SubBinning: Python")
-            self.p_per_subbins = self.p_per_subbins_np
+            self.p_per_subbins = self.p_per_subbins_py
 
     @staticmethod
     def p_per_subbins_py(s, SBINB, K_BIN):
@@ -360,12 +292,6 @@ class SubBinning:
             while s[n] >= SBINB[ib + 1] and ib < K_BIN - 1:
                 ib = ib + 1
             NBIN[ib] = NBIN[ib] + 1
-        return NBIN
-
-    @staticmethod
-    def p_per_subbins_np(s, SBINB, K_BIN):
-        ib = np.searchsorted(SBINB, s, side='right') - 1
-        NBIN, _ = np.histogram(ib, bins=np.arange(K_BIN + 1))
         return NBIN
 
     def subbin_bound(self, q, s, x_qbin, n_bin, m_bin):
@@ -712,42 +638,41 @@ class CSR(PhysProc):
         self.apply_step = 0.0005 [m] - step of the calculation CSR kick, to calculate average CSR kick
     """
 
-    def __init__(self, **kw):
+    def __init__(self):
         PhysProc.__init__(self)
         # binning parameters
-        self.x_qbin = kw.get("x_qbin", 0) # length or charge binning; 0... 1 = length...charge
-        self.n_bin = kw.get("n_bin", 100) # number of bins
-        self.m_bin = kw.get("m_bin", 5)   # multiple binning(with shifted bins)
+        self.x_qbin = 0             # length or charge binning; 0... 1 = length...charge
+        self.n_bin = 100            # number of bins
+        self.m_bin = 5              # multiple binning(with shifted bins)
 
         # smoothing
-        self.ip_method = kw.get("ip_method", 2)     # = 0 / 1 / 2 for rectangular / triangular / gauss
-        self.sp = kw.get("sp", 0.5)                 # ? parameter for gauss
-        self.sigma_min = kw.get("sigma_min", 1.e-4) # minimal sigma, if ip_method == 2
-        self.step_unit = kw.get("step_unit", 0)     # if positive --> step=integer * step_unit
+        self.ip_method = 2          # = 0 / 1 / 2 for rectangular / triangular / gauss
+        self.sp = 0.5               # ? parameter for gauss
+        self.sigma_min = 1.e-4      # minimal sigma, if ip_method == 2
+        self.step_unit = 0          # if positive --> step=integer * step_unit
 
         # trajectory
-        self.traj_step = kw.get("traj_step", 0.0002)  # [m] step of the trajectory
-        self.energy = kw.get("energy", None)          # [GeV], if None, beta = 1 and calculation of the trajectory with RK is not possible
+        self.traj_step = 0.0002     # [m] step of the trajectory
+        self.energy = None          # [GeV], if None, beta = 1 and calculation of the trajectory with RK is not possible
 
         # CSR kick
-        self.apply_step = kw.get("apply_step", 0.0005) # [m] step of the calculation CSR kick: csr_kick += csr(apply_step)
-        self.step = kw.get("step", 1)                  # step in the unit steps, step_in_[m] = self.step * navigator.unit_step [m].
-                                                       # The CSR kick is applied at the end of the each step
+        self.apply_step = 0.0005    # [m] step of the calculation CSR kick: csr_kick += csr(apply_step)
+        self.step = 1               # step in the unit steps, step_in_[m] = self.step * navigator.unit_step [m].
+        # The CSR kick is applied at the end of the each step
 
-        self.z_csr_start = kw.get("z_csr_start", 0.) # z [m] position of the start_elem
-        self.z0 = kw.get("z0", 0.)                   # self.z0 = navigator.z0 in track.track()
+        self.z_csr_start = 0.       # z [m] position of the start_elem
+        self.z0 = 0.                # self.z0 = navigator.z0 in track.track()
 
-        self.end_poles = kw.get("end_poles", False) # if True magnetic field configuration 1/4, -3/4, 1, ...
-        self.rk_traj = kw.get("rk_traj", False)     # calculate trajectory of the reference particle with RK method
+        self.end_poles = False      # if True magnetic field configuration 1/4, -3/4, 1, ...
+        self.rk_traj = False        # calculate trajectory of the reference particle with RK method
 
-        self.debug = kw.get("debug", False)
+        self.debug = False
         # another filter
-        self.filter_order = kw.get("filter_order", 10)
-        self.n_mesh = kw.get("n_mesh", 345)
+        self.filter_order = 10
+        self.n_mesh = 345
 
-        # if True trajectory of the reference particle will be produced
-        # and CSR wakes will be saved in the working folder on each step
-        self.pict_debug = kw.get("pict_debug", False)
+        self.pict_debug = False     # if True trajectory of the reference particle will be produced
+        # and CSR wakes will be saved in the working folder on each spep
 
         self.sub_bin = SubBinning(x_qbin=self.x_qbin, n_bin=self.n_bin, m_bin=self.m_bin)
         self.bin_smoth = Smoothing()
@@ -894,16 +819,13 @@ class CSR(PhysProc):
             L_fin = False
 
         w_range = np.arange(-NdW[0]-1, 0)*NdW[1]
+
         if L_fin:
             w, KS = self.k0_fin_anf.eval(i, traj, w_range[0], gamma)
         else:
             w, KS = self.K0_inf_anf(i, traj, w_range[0])
 
-        try:
-            KS1 = KS[0]
-        except IndexError:
-            KS = [KS]
-            KS1 = KS[0]
+        KS1 = KS[0]
 
         # w, idx = np.unique(w, return_index=True)
         # KS = KS[idx]
@@ -940,24 +862,20 @@ class CSR(PhysProc):
 
         # if pict_debug = True import matplotlib
         if self.pict_debug:
-            self.plt = importlib.import_module("matplotlib.pyplot")
             self.napply = 0
             self.total_wake = 0
-
-
-        self.z_csr_start = sum([p.l for p in lat.sequence[:self.indx0]])
-        p = Particle()
-        beta = 1. if self.energy is None else np.sqrt(1. - 1./(self.energy/m_e_GeV)**2)
-        self.csr_traj = np.transpose([[0, p.x, p.y, p.s, p.px, p.py, 1.]])
-        if Undulator in [elem.__class__ for elem in lat.sequence[self.indx0:self.indx1+1]] and not self.rk_traj:
-            self.rk_traj = True
-            logger.warning("CSR: Undulator element is in CSR section --> rk_traj = True")
 
         if self.energy is None and self.rk_traj:
             raise CSRConfigurationError(
                 "RK trajectory calc set but CSR.energy left unset."
             )
 
+        self.z_csr_start = sum([p.l for p in lat.sequence[:self.indx0]])
+        p = Particle()
+        beta = 1. if self.energy is None else np.sqrt(1. - 1./(self.energy/m_e_GeV)**2)
+        self.csr_traj = np.transpose([[0, p.x, p.y, p.s, p.px, p.py, 1.]])
+        if Undulator in [elem.__class__ for elem in lat.sequence[self.indx0:self.indx1+1]]:
+            self.rk_traj = True
         for elem in lat.sequence[self.indx0:self.indx1+1]:
 
             if elem.l == 0:
@@ -992,7 +910,6 @@ class CSR(PhysProc):
                     def mag_field(x, y, z): return (Bx, By, 0)
 
                 elif elem.__class__ == Undulator:
-                    print("ENERGY = ",self.energy)
                     gamma = self.energy/m_e_GeV
                     ku = 2 * np.pi / elem.lperiod
                     delta_z = elem.lperiod * elem.nperiods
@@ -1007,7 +924,7 @@ class CSR(PhysProc):
 
                     # ending poles 1/4, -3/4, 1, -1, ... (or -1/4, 3/4, -1, 1)
                     if self.end_poles:
-                        def mag_field(x, y, z): return und_field(x, y, z, elem.lperiod, elem.Kx, nperiods=elem.nperiods, end_poles='3/4')
+                        def mag_field(x, y, z): return und_field(x, y, z, elem.lperiod, elem.Kx, nperiods=elem.nperiods)
 
                 else:
                     delta_z = delta_s * np.sin(elem.angle) / elem.angle if elem.angle != 0 else delta_s
@@ -1065,21 +982,21 @@ class CSR(PhysProc):
                 self.csr_traj = arcline(self.csr_traj, delta_s, step, R_vect)
         # plot trajectory of the refernece particle
         if self.pict_debug:
-            fig = self.plt.figure(figsize=(10, 8))
-            ax1 = self.plt.subplot(211)
+            fig = plt.figure(figsize=(10, 8))
+            ax1 = plt.subplot(211)
             #ax1.plot(self.csr_traj[0, :], self.csr_traj[0, :] -self.csr_traj[3, :], "r", label="X")
             ax1.plot(self.csr_traj[0, :], self.csr_traj[1, :]*1000, "r", label="X")
             ax1.plot(self.csr_traj[0, :], self.csr_traj[2, :]*1000, "b", label="Y")
-            self.plt.legend()
-            self.plt.ylabel("X/Y [mm]")
-            self.plt.setp(ax1.get_xticklabels(), visible=False)
-            ax3 = self.plt.subplot(212, sharex=ax1)
+            plt.legend()
+            plt.ylabel("X/Y [mm]")
+            plt.setp(ax1.get_xticklabels(), visible=False)
+            ax3 = plt.subplot(212, sharex=ax1)
             ax3.plot(self.csr_traj[0, :], self.csr_traj[1 + 3, :]*1000, "r", label=r"$X'$")
             ax3.plot(self.csr_traj[0, :], self.csr_traj[2 + 3, :]*1000, "b", label=r"$Y'$")
-            self.plt.legend()
-            self.plt.ylabel(r"$X'/Y'$ [mrad]")
-            self.plt.xlabel("s [m]")
-            self.plt.show()
+            plt.legend()
+            plt.ylabel(r"$X'/Y'$ [mrad]")
+            plt.xlabel("s [m]")
+            plt.show()
             # data = np.array([np.array(self.s), np.array(self.total_wake)])
             # np.savetxt("trajectory_cos.txt", self.csr_traj)
         return self.csr_traj
@@ -1090,7 +1007,6 @@ class CSR(PhysProc):
             return
         s_cur = self.z0 - self.z_csr_start
         z = -p_array.tau()
-
         ind_z_sort = np.argsort(z)
         #SBINB, NBIN = subbin_bound(p_array.q_array, z[ind_z_sort], self.x_qbin, self.n_bin, self.m_bin)
         #B_params = [self.x_qbin, self.n_bin, self.m_bin, self.ip_method, self.sp, self.sigma_min]
@@ -1101,9 +1017,7 @@ class CSR(PhysProc):
         st = (s2 - s1) / Ns
         sa = s1 + st / 2.
         Ndw = [Ns - 1, st]
-        #print(Ndw, z[ind_z_sort][-1] - z[ind_z_sort][0], len(lam_ds), z[ind_z_sort].max() - z[ind_z_sort].min(), s1, s2)
-        #plt.plot(lam_ds)
-        #plt.show()
+
         s_array = self.csr_traj[0, :]
         indx = (np.abs(s_array - s_cur)).argmin()
         indx_prev = (np.abs(s_array - (s_cur - delta_s))).argmin()
@@ -1111,18 +1025,14 @@ class CSR(PhysProc):
         h = max(1., self.apply_step/self.traj_step)
 
         itr_ra = np.unique(-np.round(np.arange(-indx, -indx_prev, h))).astype(int)
-
+        
         K1 = 0
+        if len(itr_ra) == 0:
+            itr_ra = self.itr_ra_prev
         for it in itr_ra:
             K1 += self.CSR_K1(it, self.csr_traj, Ndw, gamma=gamma)
-        #x = np.arange(Ndw[0] + 1) * Ndw[1]
-        #xp = np.arange(self.kernel_Ndw[0] + 1) * self.kernel_Ndw[1]
-        #for it in itr_ra:
-        #    fp = self.kernels[it]
-        #    #print(len(fp), len(xp), self.kernel_Ndw)
-        #    K1 = np.interp(x, xp, fp)
-        #    K1 += K1 #self.CSR_K1(it, self.csr_traj, Ndw, gamma=gamma)
         K1 /= len(itr_ra)
+        self.itr_ra_prev = itr_ra
 
         lam_K1 = csr_convolution(lam_ds, K1[::-1]) / st * delta_s
 
@@ -1146,24 +1056,6 @@ class CSR(PhysProc):
         #     data = np.array([ np.array(self.total_wake)])
         #     np.savetxt("total_wake_test.txt", data)
 
-    def calcualte_csr_wakes(self):
-        #B_params = [self.x_qbin, self.n_bin, self.m_bin, self.ip_method, self.sp, self.sigma_min]
-        #s1, s2, Ns = self.bin_smoth.Q2EQUI_modified(B_params, SBINB)
-        #st = (s2 - s1) / Ns
-        #Ndw = [Ns - 1, st]
-        gamma = 14 / m_e_GeV
-        s_array = self.csr_traj[0, :]
-        self.kernel_Ndw = [500, 25e-6]
-        self.kernels = {}
-        self.kern_indx = []
-        for it in range(len(s_array))[1:]:
-            kern = self.CSR_K1(it, self.csr_traj, self.kernel_Ndw, gamma=gamma)
-            #print(len(kern))
-            self.kernels[it] = kern
-            self.kern_indx.append(it)
-
-        return self.kernels
-
     def plot_wake(self, p_array, lam_K1, itr_ra, s1, st):
         """
         Method to plot CSR wakes on each step and save pictures in the working folder. Might be time-consuming.
@@ -1176,22 +1068,22 @@ class CSR(PhysProc):
         :return:
         """
         self.napply += 1
-        fig = self.plt.figure(figsize=(10, 8))
+        fig = plt.figure(figsize=(10, 8))
 
-        ax1 = self.plt.subplot(311)
+        ax1 = plt.subplot(311)
         ax1.plot(self.csr_traj[0, :], self.csr_traj[1, :]*1000, "r",  self.csr_traj[0, itr_ra], self.csr_traj[1, itr_ra]*1000, "bo")
-        self.plt.ylabel("X [mm]")
+        plt.ylabel("X [mm]")
 
-        ax2 = self.plt.subplot(312)
+        ax2 = plt.subplot(312)
         # # CSR wake in keV/m - preferable and not depend on step
         # ax2.plot(np.linspace(s1, s1+st*len(lam_K1), len(lam_K1))*1000, lam_K1/delta_s/1000.)
         # plt.ylabel("dE, keV/m")
 
         # CSR wake in keV - amplitude changes with step
-        ax2.plot(np.linspace(s1, s1 + st * len(lam_K1), len(lam_K1)) * 1000, lam_K1 *1e-3)
-        self.plt.setp(ax2.get_xticklabels(), visible=False)
-        self.plt.ylim((-50, 50))
-        self.plt.ylabel("Wake [keV]")
+        ax2.plot(np.linspace(s1, s1 + st * len(lam_K1), len(lam_K1)) * 1000, lam_K1 * 1e-3)
+        plt.setp(ax2.get_xticklabels(), visible=False)
+        plt.ylim((-50, 50))
+        plt.ylabel("Wake [keV]")
 
         # ax3 = plt.subplot(413)
         # n_points = len(lam_K1)
@@ -1203,24 +1095,16 @@ class CSR(PhysProc):
         # plt.setp(ax3.get_xticklabels(), visible=False)
         # plt.ylim((-10, 10))
 
-        ax3 = self.plt.subplot(313, sharex=ax2)
+        ax3 = plt.subplot(313, sharex=ax2)
         self.B = s_to_cur(p_array.tau(), sigma=np.std(p_array.tau())*0.05, q0=np.sum(p_array.q_array), v=speed_of_light)
         ax3.plot(-self.B[:, 0]*1000, self.B[:, 1], lw=2)
         ax3.set_ylabel("I [A]")
         ax3.set_xlabel("s [mm]")
-        self.plt.subplots_adjust(hspace=0.2)
+        plt.subplots_adjust(hspace=0.2)
         dig = str(self.napply)
         name = "0" * (4 - len(dig)) + dig
-        self.plt.savefig( name + '.png')
-
-    def __repr__(self) -> str:
-        cname = type(self).__name__
-        sigma_min = self.sigma_min
-        traj_step = self.traj_step
-        apply_step = self.apply_step
-        n_bin = self.n_bin
-        step = self.step
-        return f"<{cname}: {sigma_min=}, {traj_step=}, {apply_step=}, {n_bin=}, {step=}>"
+        plt.savefig(name + '.png')
+        plt.close(fig)
 
 
 class SaferCSR(CSR):

@@ -26,6 +26,7 @@ __all__ = ['Twiss', "Beam", "Particle", "get_current", "get_envelope", "generate
             "EbeamParams",                                                                      # beam_params
             "CSR",                                                                              # csr
             "SpaceCharge", "LSC",                                                               # sc
+            "MBI",                                                                              # mbi
             "Wake", "WakeTable", "WakeKick", "WakeTableDechirperOffAxis",                       # wake
             "BeamTransform", "SmoothBeam", "EmptyProc", "PhysProc", "LaserHeater",
             "LaserModulator", "SpontanRadEffects", "PhaseSpaceAperture",
@@ -59,6 +60,7 @@ from ocelot.cpbd.beam_params import *
 from ocelot.cpbd.io import *
 from ocelot.cpbd.sc import *
 from ocelot.cpbd.csr import *
+from ocelot.cpbd.mbi import *
 from ocelot.cpbd.wake3D import *
 from ocelot.cpbd.physics_proc import *
 from ocelot.cpbd.navi import Navigator

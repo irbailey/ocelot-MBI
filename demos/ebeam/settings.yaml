@@ -1,0 +1,111 @@
+csr:
+  BC1_end: MK_BC1END
+  BC1_start: MK_BC1START
+  BC2_end: MK_BC2END
+  BC2_start: MK_BC2START
+  SCL_end: MK_SCLEND
+  SCL_start: MK_SCLSTART
+  m_bin: 5
+  n_bin: 100
+  sigma_min: 2.0e-07
+ebeam:
+  alphax_init: -4.7565269906522385
+  alphay_init: 9.511232572792196
+  betax_init: 9.966707172389187
+  betay_init: 11.639370896166243
+  charge: 5.0e-10
+  code: ocelot
+  csr: true
+  current_end: .nan
+  current_init: 62.299
+  emit_x: 2.097e-06
+  emit_y: 1.941e-06
+  energy_end: 1.2421149091753352
+  energy_init: 0.096
+  energy_spread: -9.99
+  input: Q_LH.04.npz
+  lattice: lattice.py
+  lattice_path: /media/bry/New Volume/ADB/ocelot-MBI/demos/ebeam/lattice.py
+  lh: true
+  lsc: true
+  output: Q_TLS.02.npz
+  space_charge: false
+  twiss_splits: {}
+  twissfile: twiss.h5
+  unit_step: 0.3
+  wakes: true
+endelem: Q_TLS.02
+input: /media/bry/New Volume/ADB/ocelot-MBI/demos/ebeam/Q_LH.04.npz
+input_name: Q_LH.04.npz
+laser_heater:
+  laser: LSR_LH
+  pulse_length: 1.0e-11
+  und: UND_LH.01
+lattice_dir: /media/bry/New Volume/ADB/ocelot-MBI/demos/ebeam/
+line: Q_LH.04_Q_TLS.02
+local_path: /media/bry/New Volume/ADB/ocelot-MBI/demos/ebeam/
+out_dir: /media/bry/New Volume/ADB/ocelot-MBI/demos/ebeam/
+remote_path: /media/bry/New Volume/ADB/ocelot-MBI/demos/ebeam/
+space_charge:
+  end: -1
+  mesh:
+  - 16
+  - 16
+  - 16
+  start: 0
+  step: 1
+startelem: Q_LH.04
+time_stamp: '2024_05_07_12_00_03'
+username: alexander.brynes
+wake:
+  ACCBT_L03_1_maxv: 0.13
+  ACCBT_L03_1_ncell: 163
+  ACCBT_L03_1_wake: wakeZ_PSI_S318_5mm.dat
+  ACCBT_L03_2_maxv: 0.13
+  ACCBT_L03_2_ncell: 163
+  ACCBT_L03_2_wake: wakeZ_PSI_S318_5mm.dat
+  ACCBT_L04_1_maxv: 0.13
+  ACCBT_L04_1_ncell: 163
+  ACCBT_L04_1_wake: wakeZ_PSI_S318_5mm.dat
+  ACCBT_L04_2_maxv: 0.13
+  ACCBT_L04_2_ncell: 163
+  ACCBT_L04_2_wake: wakeZ_PSI_S318_5mm.dat
+  ACCBT_L04_3_maxv: 0.13
+  ACCBT_L04_3_ncell: 163
+  ACCBT_L04_3_wake: wakeZ_PSI_S318_5mm.dat
+  ACCBT_L04_4_maxv: 0.13
+  ACCBT_L04_4_ncell: 163
+  ACCBT_L04_4_wake: wakeZ_PSI_S318_5mm.dat
+  ACCBT_L04_5_maxv: 0.13
+  ACCBT_L04_5_ncell: 163
+  ACCBT_L04_5_wake: wakeZ_PSI_S318_5mm.dat
+  ACCH_L01_maxv: 0.023
+  ACCH_L01_ncell: 50
+  ACCH_L01_wake: 'NO'
+  ACCT_L01_01_maxv: 0.05895
+  ACCT_L01_01_ncell: 97
+  ACCT_L01_01_wake: wakeZ_CERN_Trieste_5mm_Spampi.dat
+  ACCT_L01_02_maxv: 0.05895
+  ACCT_L01_02_ncell: 97
+  ACCT_L01_02_wake: wakeZ_CERN_Trieste_5mm_Spampi.dat
+  ACCT_L01_03_maxv: 0.05895
+  ACCT_L01_03_ncell: 97
+  ACCT_L01_03_wake: wakeZ_CERN_Trieste_5mm_Spampi.dat
+  ACCT_L01_04_maxv: 0.05895
+  ACCT_L01_04_ncell: 97
+  ACCT_L01_04_wake: wakeZ_CERN_Trieste_5mm_Spampi.dat
+  ACCT_L02.04_maxv: 0.05895
+  ACCT_L02.04_ncell: 100
+  ACCT_L02.04_wake: wakeZ_S0AB_Trieste_5mm.dat
+  ACCT_L02_1_maxv: 0.05895
+  ACCT_L02_1_ncell: 135
+  ACCT_L02_1_wake: wakeZ_CERN_Trieste_5mm_Spampi.dat
+  ACCT_L02_2_maxv: 0.05895
+  ACCT_L02_2_ncell: 135
+  ACCT_L02_2_wake: wakeZ_CERN_Trieste_5mm_Spampi.dat
+  ACCT_L02_3_maxv: 0.05895
+  ACCT_L02_3_ncell: 135
+  ACCT_L02_3_wake: wakeZ_CERN_Trieste_5mm_Spampi.dat
+  ACCT_L04.06_maxv: 0.1
+  ACCT_L04.06_ncell: 100
+  ACCT_L04.06_wake: wakeZ_S0AB_Trieste_5mm.dat
