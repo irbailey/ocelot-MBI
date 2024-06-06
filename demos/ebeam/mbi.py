@@ -2,7 +2,7 @@ import sys, os
 for i,j in enumerate(sys.path):
     if 'ocelot' in j:
         sys.path.pop(i)
-sys.path.append('/media/bry/New Volume/ADB/ocelot-MBI')
+sys.path.append('../../')
 import ocelot
 import yaml
 import importlib
