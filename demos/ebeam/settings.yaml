@@ -25,7 +25,7 @@ ebeam:
   energy_spread: -9.99
   input: Q_LH.04.npz
   lattice: lattice.py
-  lattice_path: ./lattice.py
+  lattice_path: /media/bry/New Volume/ADB/ocelot-MBI/demos/ebeam/lattice.py
   lh: true
   lsc: true
   output: Q_TLS.02.npz
@@ -35,17 +35,17 @@ ebeam:
   unit_step: 0.3
   wakes: true
 endelem: Q_TLS.02
-input: ./Q_LH.04.npz
+input: /media/bry/New Volume/ADB/ocelot-MBI/demos/ebeam/Q_LH.04.npz
 input_name: Q_LH.04.npz
 laser_heater:
   laser: LSR_LH
   pulse_length: 1.0e-11
   und: UND_LH.01
-lattice_dir: ./
+lattice_dir: /media/bry/New Volume/ADB/ocelot-MBI/demos/ebeam/
 line: Q_LH.04_Q_TLS.02
-local_path: ./
-out_dir: ./
-remote_path: ./
+local_path: /media/bry/New Volume/ADB/ocelot-MBI/demos/ebeam/
+out_dir: /media/bry/New Volume/ADB/ocelot-MBI/demos/ebeam/
+remote_path: /media/bry/New Volume/ADB/ocelot-MBI/demos/ebeam/
 space_charge:
   end: -1
   mesh:

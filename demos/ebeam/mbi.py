@@ -42,7 +42,7 @@ def run_ocelot():
     navi = ocelot.cpbd.optics.Navigator(lattice)
     lattice, navi, mbi = set_collective_effects(lattice, navi)
     p_array_in = deepcopy(p_array_input)
-    tws_track, p_array_output = ocelot.cpbd.track.track(lattice, p_array_in, navi)
+    tws_track, p_array_output = ocelot.cpbd.track.track(lattice, p_array_input, navi)
     results = {'track': [tws_track, p_array_output, lattice]}
     # return results
     outfiles = save_ocelot_files(lattice, p_array_in, settings['input_name'], tws_track, p_array_output)
