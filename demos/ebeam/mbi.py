@@ -183,7 +183,6 @@ def set_collective_effects(lattice, navi, all=False):
     setwake = settings['ebeam']['wakes']
     setlh = settings['ebeam']['lh']
     mbi1 = ocelot.cpbd.mbi.MBI(lamb_range=np.linspace(0.1e-6,50e-6,30))
-    mbi1.step = settings['ebeam']['unit_step']
     mbi1.navi = copy.deepcopy(navi)
     mbi1.lattice = copy.deepcopy(lattice)
     mbi1.lsc = True
@@ -201,7 +200,6 @@ def set_collective_effects(lattice, navi, all=False):
             csr.n_bin = settings['csr']['n_bin']
             csr.m_bin = settings['csr']['m_bin']
             csr.sigma_min = settings['csr']['sigma_min']
-            csr.step = settings['ebeam']['unit_step']
             navi.add_physics_proc(csr, lattice.sequence[0], lattice.sequence[-1])
         else:
             csr, csrst, csrend = set_csr(lattice)
@@ -304,7 +302,6 @@ def set_csr(lattice):
     csr.n_bin = settings['csr']['n_bin']
     csr.m_bin = settings['csr']['m_bin']
     csr.sigma_min = settings['csr']['sigma_min']
-    csr.unit_step = settings['ebeam']['unit_step']
     elems = ['BC1', 'SCL']
     for el in elems:
         st = settings['csr'][el+'_start']
@@ -333,7 +330,6 @@ def set_wake(cav, names):
     wakelen = len(zwaketab.TH[:][0][0][4])
     zwake.w_sampling = wakelen
     zwake.wake_table = zwaketab
-    zwake.step = settings['ebeam']['unit_step']
     zwake.factor = settings['wake'][cav.id + '_ncell']
     st = np.where(names == cav.id)[0][0]
     return [zwake, st]
