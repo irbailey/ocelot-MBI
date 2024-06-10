@@ -40,6 +40,7 @@ def run_ocelot():
     p_array_input.q_array = np.ones(datalen) * charge / datalen
     p_array_input_1 = deepcopy(p_array_input)
     navi = ocelot.cpbd.optics.Navigator(lattice)
+    navi.unit_step = settings['ebeam']['unit_step']
     lattice, navi, mbi = set_collective_effects(lattice, navi)
     p_array_in = deepcopy(p_array_input)
     tws_track, p_array_output = ocelot.cpbd.track.track(lattice, p_array_input, navi)
@@ -174,6 +175,7 @@ def set_collective_effects(lattice, navi, all=False):
     :return: Navigator w/ collective effects
     '''
     navi = navi
+    navi.unit_step = settings['ebeam']['unit_step']
     lattice = lattice
     setsc = settings['ebeam']['space_charge']
     setlsc = settings['ebeam']['lsc']
@@ -256,7 +258,6 @@ def set_collective_effects(lattice, navi, all=False):
             lhfac = (lhund.Ky * jjfac * lhund.nperiods * (0.1 * lhund.lperiod)) / (lhx * twis.E * 1e3 / 0.511)
             lhphysproc.dE = beamsizefac * powfac * lhfac
             navi.add_physics_proc(lhphysproc, lattice.sequence[lhundind], lattice.sequence[lhundind + 1])
-    navi.unit_step = settings['ebeam']['unit_step']
     return [lattice, navi, mbi1]
 
 def set_space_charge():

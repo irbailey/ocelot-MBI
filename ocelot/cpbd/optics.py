@@ -121,20 +121,21 @@ def lattice_transfer_map_z(lattice, energy, zfin):
     Ta = np.zeros((6, 6, 6))
     Ba = np.zeros((6, 1))
     E = energy
-    z1 = 0
-    for i, elem in enumerate(lattice.sequence):
-        z1 += elem.l
-        if z1 < zfin:
-            for Rb, Bb, Tb, tm in zip(elem.R(E), elem.B(E), elem.T(E), elem.tms):
-                Ba, Ra, Ta = transfer_maps_mult(Ba, Ra, Ta, Bb, Rb, Tb)
-                # Ba = np.dot(Rb, Ba) + Bb
-                E += tm.get_delta_e()
-        else:
-            if list(set((lattice.sequence[i].get_section_tms(delta_l=abs(zfin - z1))[-1].get_params(E).R == np.eye(6,6)).flatten())):
-                Ra = np.dot(lattice.sequence[i].get_section_tms(delta_l=lattice.sequence[i].l * 0.999)[-1].get_params(E).R, Ra)
-            else:
-                Ra = np.dot(lattice.sequence[i].get_section_tms(delta_l=abs(zfin - z1) * 0.999)[-1].get_params(E).R, Ra)
-            break
+    i = 0
+    elem = lattice.sequence[i]
+    L = elem.l
+    while zfin > L:
+        for Rb, Bb, Tb, tm in zip(elem.R(E), elem.B(E), elem.T(E), elem.tms):
+            Ba, Ra, Ta = transfer_maps_mult(Ba, Ra, Ta, Bb, Rb, Tb)
+            # Ba = np.dot(Rb, Ba) + Bb
+            E += tm.get_delta_e()
+        i += 1
+        elem = lattice.sequence[i]
+        L += elem.l
+    delta_l = zfin - (L - elem.l)
+    first_order_tms = np.dot(lattice.sequence[i].get_section_tms(start_l=0.0, delta_l=delta_l, first_order_only=True)[-1].get_params(E).R, Ra)
+
+    return first_order_tms
 
     # TODO: Adding Attributes at runtime should be avoided
     lattice.E = E

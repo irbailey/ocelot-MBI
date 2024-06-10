@@ -16,11 +16,11 @@ ebeam:
   charge: 5.0e-10
   code: ocelot
   csr: true
-  current_end: 266.279
+  current_end: .nan
   current_init: 62.299
   emit_x: 2.097e-06
   emit_y: 1.941e-06
-  energy_end: 3.5347151939041535
+  energy_end: 1.242114909175235
   energy_init: 0.096
   energy_spread: -9.99
   input: Q_LH.04.npz
@@ -32,7 +32,7 @@ ebeam:
   space_charge: false
   twiss_splits: {}
   twissfile: twiss.h5
-  unit_step: 0.3
+  unit_step: 0.1
   wakes: true
 endelem: Q_TLS.02
 input: /media/bry/New Volume/ADB/ocelot-MBI/demos/ebeam/Q_LH.04.npz

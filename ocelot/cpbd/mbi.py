@@ -125,7 +125,7 @@ def compressed_current(I0, compression_factor):
     return I0 * compression_factor
 
 def geometric_emittance(enx, energy):
-    return enx/(energy/m_e_MeV)
+    return enx/(energy/m_e_GeV)
 
 def eta_p(theta):
     return theta
@@ -145,13 +145,11 @@ class MBI(PhysProc):
         self.smooth_param = 0.1
         self.step_profile = False
         self.napply = 0
-        self.R56_TauS = []
         self.lsc = False
         self.csr = False
         self.ibs = False
         self.num_slice = 1
         self.first = True
-        #self.navi = None
         self.lamb_range = lamb_range
         #self.lattice = None
         self.zpos = 0
@@ -182,7 +180,8 @@ class MBI(PhysProc):
                 sli.update({'me': np.mean(v[sli_min: sli_max] / 1e9)})
                 sli.update({'gamma': np.mean(v[sli_min: sli_max] / 1e6 / m_e_MeV)})
             elif k in ['emitxn', 'emityn']:
-                sli.update({k.replace('mit','').replace('n',''): v / (m_e_MeV * 1e-6 * np.mean(slice_params.me[sli_min: sli_max]))})
+                sli.update({k.replace('mit','').replace('n',''): geometric_emittance(v, np.mean(slice_params.me[sli_min: sli_max]))})
+        sli.update({'s': p_array.s})
         return sli
 
     def apply(self, p_array, dz):
@@ -202,13 +201,14 @@ class MBI(PhysProc):
         sigma_tau = np.std(p_array_c.tau())
         slice_min = mean_b - sigma_tau / 2.5
         slice_max = mean_b + sigma_tau / 2.5
-        self.zpos += dz
         self.slice_params.append(self.get_slice_params(p_array_c))
-        self.z0 = self.navi.z0
-        self.ltm = lattice_transfer_map_z(self.lattice, self.slice_params[-1]['me'], self.zpos)
+        self.z0 = self.slice_params[-1]['s'] - self.slice_params[0]['s']
+        self.ltm = lattice_transfer_map_z(self.lattice, self.slice_params[0]['me'], self.z0)
         self.optics_map.append(self.ltm)
         self.dist.append(self.z0)
-        print(self.optics_map[-1])
+        print(self.ltm)
+        # print(self.optics_map[-1][4,5])
+        # print(self.z0)
         for i, l in enumerate(self.lamb_range):
             self.ld_0s = self.ld0s(l, self.slice_params, self.optics_map)
             self.b0fac = b0(l, self.slice_params[0]['I']) * self.ld_0s
@@ -224,9 +224,10 @@ class MBI(PhysProc):
                         #print(f'j {j} b {b} lenslipar {len(self.slice_params)}')
                     # if j < len(self.slice_params):
                     self.fac = 0.5 if j == 0 else 1
+                    self.distance = self.slice_params[-1]['s'] if j == 0 else (self.slice_params[-1]['s'] - self.slice_params[-2]['s'])
                     # self.k0r = self.fac * self.kernel_K0(l, self.slice_params, self.optics_map, j)
                     # self.k0tot.append(((self.k0r.real * b) + (self.k0r.imag * b)))
-                    self.k1r = self.fac * self.kernel_K1(l, self.slice_params, self.optics_map, j)
+                    self.k1r = self.distance * self.fac * self.kernel_K1(l, self.slice_params, self.optics_map, j)
                     self.k1tot.append(abs((self.k1r.real * b) + (self.k1r.imag * b)))
                     # if i == 1:
                     #     print(f'j {j} b {b} k0r {self.k0r.real} k0i {self.k0r.imag} k1r {self.k1r.real} k1i {self.k1r.imag} k0rb {self.k0r.real * b} k0ib {self.k0r.imag * b} k1rb {self.k1r.real * b} k1ib {self.k1r.imag * b}')
@@ -237,7 +238,7 @@ class MBI(PhysProc):
                 # print(self.bf[i][-1])
                 # self.bf[i][-1] += np.nansum(self.k0tot)
                 # print(self.bf[i][-1])
-                if i == 1:
+                if i == 11:
                     # print(i)
                     # print(self.k1tot)
                     print(np.nansum(self.k1tot))
@@ -341,7 +342,7 @@ class MBI(PhysProc):
         result = np.exp(kfac * exponent)
         return result
 
-    def r56taus(self, slice_params, optics_map, i1):
+    def r56taus(self, optics_map, i1):
         '''
         Eq. 49: R56 transport parameter between beamline elements
 
@@ -351,17 +352,20 @@ class MBI(PhysProc):
 
         :return: R56(tau->s)
         '''
-        r51s = optics_map[-1][4, 0]
-        r52s = optics_map[-1][4, 1]
-        r53s = optics_map[-1][4, 2]
-        r54s = optics_map[-1][4, 3]
-        r56s = optics_map[-1][4, 5]
-        r51tau = optics_map[i1][4, 0]
-        r52tau = optics_map[i1][4, 1]
-        r53tau = optics_map[i1][4, 2]
-        r54tau = optics_map[i1][4, 3]
-        r56tau = optics_map[i1][4, 5]
-        return (r56s - r56tau) + (r51tau * r52s) - (r51s * r52tau) + (r53tau * r54s) - (r53s * r54tau)
+        r51s = optics_map[i1][4, 0]
+        r52s = optics_map[i1][4, 1]
+        r53s = optics_map[i1][4, 2]
+        r54s = optics_map[i1][4, 3]
+        r55s = optics_map[i1][4, 4]
+        r56s = optics_map[i1][4, 5]
+        r51tau = optics_map[-1][4, 0]
+        r52tau = optics_map[-1][4, 1]
+        r53tau = optics_map[-1][4, 2]
+        r54tau = optics_map[-1][4, 3]
+        r55tau = optics_map[-1][4, 4]
+        r56tau = optics_map[-1][4, 5]
+        return (r56s * r55tau) - (r56tau * r55s) + (r51tau * r52s) - (r51s * r52tau) + (r53tau * r54s) - (r53s * r54tau)
+        # return [r56s, r56tau, r51tau, r52s, r51s, r52tau, r53tau, r54s, r53s, r54tau]
 
     def kernel_K0(self, lamb, slice_params, optics_map, i1):
         '''
@@ -387,7 +391,7 @@ class MBI(PhysProc):
             # if sigmamatrix['csr'][index1]:
             #     impedancefac += csrimpedance(lamb, sigmamatrix, index1)
         ldfac = self.ldtaus(lamb_compressed, slice_params, optics_map, i1)
-        r56fac = self.r56taus(slice_params, optics_map, i1)
+        r56fac = self.r56taus(optics_map, i1)
         return currentfac * impedancefac * ldfac
 
     def kernel_K1(self, lamb, slice_params, optics_map, i1):
@@ -405,16 +409,16 @@ class MBI(PhysProc):
 
         :return: K1
         '''
-        currentfac = slice_params[i1]['I'] / ((slice_params[i1]['gamma']) * I_Alfven)
+        currentfac = slice_params[i1]['I'] / ((slice_params[-1]['gamma']) * I_Alfven)
         compfac = (slice_params[i1]['I'] / slice_params[0]['I'])
         # compfac1 = 1 if compfac < 1 else compfac
         lamb_compressed = lamb / compfac
-        kfac = k_wn(lamb)
+        kfac = k_wn(lamb_compressed)
         impedancefac = self.lscimpedance(lamb_compressed, slice_params, i1) if self.lsc else 0
             # if sigmamatrix['csr'][index1]:
             #     impedancefac += csrimpedance(lamb, sigmamatrix, index1)
         ldfac = self.ldtaus(lamb, slice_params, optics_map, i1)
-        r56fac = self.r56taus(slice_params, optics_map, i1)
+        r56fac = self.r56taus(optics_map, i1)
         return currentfac * kfac * r56fac * impedancefac * ldfac
 
 
@@ -442,7 +446,7 @@ class MBI(PhysProc):
             # if sigmamatrix['csr'][index1]:
             #     impedancefac += csrimpedance(lamb, sigmamatrix, index1)
         ldfac = self.ldtaus(lamb_compressed, slice_params, optics_map, i1)
-        r56fac = self.r56taus(slice_params, optics_map, i1) ** 2
+        r56fac = self.r56taus(optics_map, i1) ** 2
         return currentfac * kfac * r56fac * impedancefac * ldfac
 
     def lscimpedance(self, lamb, slice_params, i1):
